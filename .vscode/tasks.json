@@ -9,7 +9,13 @@
                 "-g",
                 "${file}",
                 "-o",
-                "${fileDirname}/${fileBasenameNoExtension}"
+                "${fileDirname}/${fileBasenameNoExtension}",
+                "`",
+                "pkg-config",
+                "--cflags",
+                "--libs",
+                "gstreamer-1.0",
+                "`"
             ],
             "options": {
                 "cwd": "${fileDirname}"
