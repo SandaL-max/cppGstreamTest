@@ -1,6 +1,9 @@
 #include <gst/gst.h>
 #include <glib.h>
 #include <signal.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 static GstElement *pipeline;
 static gboolean eos_received = FALSE;
@@ -11,35 +14,73 @@ void sigint_handler(int sig) {
     gst_element_send_event(GST_ELEMENT(pipeline), gst_event_new_eos());
 }
 
+// Функция для конкатенации строки и числа
+char* concat_string_and_number(const char* str, int num) {
+    // Определяем длину строки и числа
+    size_t str_len = strlen(str);
+    char num_str[12]; // Максимальная длина int в десятичном представлении + знак
+    snprintf(num_str, sizeof(num_str), "%d", num);
+    size_t num_len = strlen(num_str);
+
+    // Выделяем память для результирующей строки
+    char* result = (char*)malloc(str_len + num_len + 1);
+    if (result == NULL) {
+        fprintf(stderr, "Ошибка выделения памяти\n");
+        exit(EXIT_FAILURE);
+    }
+
+    // Конкатенируем строку и число
+    strcpy(result, str);
+    strcat(result, num_str);
+
+    return result;
+}
+
 int main(int argc, char *argv[]) {
-    GstElement *source, *videoscale1, *videoscale2, *convert1, *convert2, *sink1, *sink2, *tee, *queue1, *queue2;
+    GstElement *source, *tee;
     GstBus *bus;
     GstMessage *msg;
     GstStateChangeReturn ret;
-    GstCaps *caps1, *caps2;
-    GstPad *sinkpad1, *sinkpad2;
 
     // Initialize GStreamer
     gst_init(&argc, &argv);
 
     // Create elements
     source = gst_element_factory_make("ximagesrc", "source");
-    videoscale1 = gst_element_factory_make("videoscale", "videoscale1");
-    convert1 = gst_element_factory_make("videoconvert", "convert1");
-    sink1 = gst_element_factory_make("xvimagesink", "sink1");
 
-    videoscale2 = gst_element_factory_make("videoscale", "videoscale2");
-    convert2 = gst_element_factory_make("videoconvert", "convert2");
-    sink2 = gst_element_factory_make("xvimagesink", "sink2");
+    int num = 3;
+    int video_formats[3][3] = {
+        {1280, 720, 30},
+        {640, 480, 15},
+        {426, 240, 5}
+    };
+    GstElement *videoscales[num];
+    GstElement *converts[num];
+    GstElement *videorates[num];
+    GstElement *sinks[num];
+    GstElement *queues[num];
+    GstCaps *caps[num];
 
     tee = gst_element_factory_make("tee", "tee");
-    queue1 = gst_element_factory_make("queue", "queue1");
-    queue2 = gst_element_factory_make("queue", "queue2");
+
+    for(int i = 0; i < num; i++) {
+        videoscales[i] = gst_element_factory_make("videoscale", concat_string_and_number("videoscale", i));
+        converts[i] = gst_element_factory_make("videoconvert", concat_string_and_number("convert", i));
+        videorates[i] = gst_element_factory_make("videorate", concat_string_and_number("videorate", i));
+        sinks[i] = gst_element_factory_make("xvimagesink", concat_string_and_number("sink", i));
+        queues[i] = gst_element_factory_make("queue", concat_string_and_number("queue", i));
+    }
 
     // Check that all elements are created successfully
-    if (!source || !videoscale1 || !convert1 || !sink1 || !videoscale2 || !convert2 || !sink2 || !tee || !queue1 || !queue2) {
+    if (!source || !tee) {
         g_printerr("Failed to create one of the elements.\n");
         return -1;
+    }
+    for (int i = 0; i < num; i++) {
+        if (!videoscales[i] || !converts[i] || !videorates[i] || !sinks[i] || !queues[i]) {
+            g_printerr("Failed to create one of the elements.\n");
+            return -1;
+        }
     }
 
     // Set properties for elements
@@ -47,24 +88,20 @@ int main(int argc, char *argv[]) {
 
     // Create pipeline and add elements to it
     pipeline = gst_pipeline_new("multi-screen-recorder");
-    gst_bin_add_many(GST_BIN(pipeline), source, tee, queue1, videoscale1, convert1, sink1, queue2, videoscale2, convert2, sink2, NULL);
+    gst_bin_add_many(GST_BIN(pipeline), source, tee, NULL);
+    for (int i = 0; i < num; i++) {
+        gst_bin_add_many(GST_BIN(pipeline), queues[i], videoscales[i], converts[i], videorates[i], sinks[i], NULL);
+    }
 
     // Set caps for videoscale
-    int resolutions1[2] = {1280, 720};
-    int resolutions2[2] = {640, 480};
-    int framerate = 30;
 
-    caps1 = gst_caps_new_simple("video/x-raw",
-                               "framerate", GST_TYPE_FRACTION, framerate, 1,
-                               "width", G_TYPE_INT, resolutions1[0],
-                               "height", G_TYPE_INT, resolutions1[1],
+    for (int i = 0; i < num; i++) {
+        caps[i] = gst_caps_new_simple("video/x-raw",
+                               "framerate", GST_TYPE_FRACTION, video_formats[i][2], 1,
+                               "width", G_TYPE_INT, video_formats[i][0],
+                               "height", G_TYPE_INT, video_formats[i][1],
                                NULL);
-
-    caps2 = gst_caps_new_simple("video/x-raw",
-                               "framerate", GST_TYPE_FRACTION, framerate, 1,
-                               "width", G_TYPE_INT, resolutions2[0],
-                               "height", G_TYPE_INT, resolutions2[1],
-                               NULL);
+    }
 
     // Link elements
     if (!gst_element_link_many(source, tee, NULL)) {
@@ -73,24 +110,19 @@ int main(int argc, char *argv[]) {
         return -1;
     }
 
-    if (!gst_element_link_many(tee, queue1, videoscale1, NULL) ||
-        !gst_element_link_filtered(videoscale1, convert1, caps1) ||
-        !gst_element_link_many(convert1, sink1, NULL)) {
-        g_printerr("Failed to link elements for first sink.\n");
-        gst_object_unref(pipeline);
-        return -1;
+    for (int i = 0; i < num; i++) {
+        if (!gst_element_link_many(tee, queues[i], videorates[i], videoscales[i], NULL) ||
+            !gst_element_link_filtered(videoscales[i], converts[i], caps[i]) ||
+            !gst_element_link_many(converts[i], sinks[i], NULL)) {
+            g_printerr("Failed to link elements for first sink.\n");
+            gst_object_unref(pipeline);
+            return -1;
+        }
     }
 
-    if (!gst_element_link_many(tee, queue2, videoscale2, NULL) ||
-        !gst_element_link_filtered(videoscale2, convert2, caps2) ||
-        !gst_element_link_many(convert2, sink2, NULL)) {
-        g_printerr("Failed to link elements for second sink.\n");
-        gst_object_unref(pipeline);
-        return -1;
+    for (int i = 0; i < num; i++) {
+        gst_caps_unref(caps[i]);
     }
-
-    gst_caps_unref(caps1);
-    gst_caps_unref(caps2);
 
     // Set the pipeline to the PLAYING state
     ret = gst_element_set_state(pipeline, GST_STATE_PLAYING);
