@@ -42,11 +42,18 @@ int main(int argc, char *argv[]) {
     gst_bin_add_many(GST_BIN(pipeline), source, videoscale, convert, sink, NULL);
 
     // Set caps for videoscale
-    // 860*140 1280*720 1920*1080
+    int resolutions[6][2] = {
+        {256, 144},
+        {426, 240},
+        {480, 360},
+        {640, 480},
+        {1280, 720},
+        {1920, 1080}
+    };
     caps = gst_caps_new_simple("video/x-raw",
                                "framerate", GST_TYPE_FRACTION, 30, 1,
-                               "width", G_TYPE_INT, 1280,
-                               "height", G_TYPE_INT, 720,
+                               "width", G_TYPE_INT, resolutions[4][0],
+                               "height", G_TYPE_INT, resolutions[4][1],
                                NULL);
 
     // Try linking elements with caps
