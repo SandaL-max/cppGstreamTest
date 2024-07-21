@@ -5,6 +5,9 @@
 #include <stdlib.h>
 #include <string.h>
 
+#define MAX_LINE_LENGTH 100
+#define MAX_VIDEO_FORMATS 10
+
 static GstElement *pipeline;
 static gboolean eos_received = FALSE;
 
@@ -15,11 +18,11 @@ void sigint_handler(int sig) {
 }
 
 // Функция для конкатенации строки и числа
-char* concat_string_and_number(const char* str, int num) {
+char* concat_string_and_number(const char* str, int video_format_count) {
     // Определяем длину строки и числа
     size_t str_len = strlen(str);
     char num_str[12]; // Максимальная длина int в десятичном представлении + знак
-    snprintf(num_str, sizeof(num_str), "%d", num);
+    snprintf(num_str, sizeof(num_str), "%d", video_format_count);
     size_t num_len = strlen(num_str);
 
     // Выделяем память для результирующей строки
@@ -36,7 +39,63 @@ char* concat_string_and_number(const char* str, int num) {
     return result;
 }
 
+// Структура для хранения параметров видеоформата
+typedef struct {
+    int width;
+    int height;
+    int framerate;
+} VideoFormat;
+
+// Функция для парсинга строки с видеоформатом
+int parse_video_format(const char* str, VideoFormat* vf) {
+    return sscanf(str, "%dx%d, %d", &vf->width, &vf->height, &vf->framerate) == 3;
+}
+
+// Функция для парсинга конфигурационного файла
+int parse_config_file(const char* filename, int* display_number, VideoFormat* video_formats, int* video_format_count) {
+    FILE *file = fopen(filename, "r");
+    if (file == NULL) {
+        perror("Ошибка открытия файла");
+        return -1;
+    }
+
+    char line[MAX_LINE_LENGTH];
+    *display_number = -1;
+    *video_format_count = 0;
+
+    while (fgets(line, sizeof(line), file)) {
+        // Удаляем символ новой строки в конце строки
+        line[strcspn(line, "\n")] = '\0';
+
+        // Парсим display_number
+        if (strncmp(line, "display_number=", 15) == 0) {
+            *display_number = atoi(line + 15);
+        } 
+        // Парсим video_format
+        else if (strncmp(line, "video_format=", 13) == 0) {
+            if (*video_format_count < MAX_VIDEO_FORMATS && parse_video_format(line + 13, &video_formats[*video_format_count])) {
+                (*video_format_count)++;
+            } else {
+                fprintf(stderr, "Ошибка парсинга video_format: %s\n", line + 13);
+            }
+        }
+    }
+
+    fclose(file);
+    return 0;
+}
+
 int main(int argc, char *argv[]) {
+    const char* filename = "config.txt";
+    int display_number;
+    VideoFormat video_formats[MAX_VIDEO_FORMATS];
+    int video_format_count;
+
+    if (parse_config_file(filename, &display_number, video_formats, &video_format_count) != 0) {
+        fprintf(stderr, "Error of parsing configuration file.\n");
+        return EXIT_FAILURE;
+    }
+
     GstElement *source, *tee;
     GstBus *bus;
     GstMessage *msg;
@@ -48,22 +107,16 @@ int main(int argc, char *argv[]) {
     // Create elements
     source = gst_element_factory_make("ximagesrc", "source");
 
-    int num = 3;
-    int video_formats[3][3] = {
-        {1280, 720, 30},
-        {640, 480, 15},
-        {426, 240, 5}
-    };
-    GstElement *videoscales[num];
-    GstElement *converts[num];
-    GstElement *videorates[num];
-    GstElement *sinks[num];
-    GstElement *queues[num];
-    GstCaps *caps[num];
+    GstElement *videoscales[video_format_count];
+    GstElement *converts[video_format_count];
+    GstElement *videorates[video_format_count];
+    GstElement *sinks[video_format_count];
+    GstElement *queues[video_format_count];
+    GstCaps *caps[video_format_count];
 
     tee = gst_element_factory_make("tee", "tee");
 
-    for(int i = 0; i < num; i++) {
+    for(int i = 0; i < video_format_count; i++) {
         videoscales[i] = gst_element_factory_make("videoscale", concat_string_and_number("videoscale", i));
         converts[i] = gst_element_factory_make("videoconvert", concat_string_and_number("convert", i));
         videorates[i] = gst_element_factory_make("videorate", concat_string_and_number("videorate", i));
@@ -76,7 +129,7 @@ int main(int argc, char *argv[]) {
         g_printerr("Failed to create one of the elements.\n");
         return -1;
     }
-    for (int i = 0; i < num; i++) {
+    for (int i = 0; i < video_format_count; i++) {
         if (!videoscales[i] || !converts[i] || !videorates[i] || !sinks[i] || !queues[i]) {
             g_printerr("Failed to create one of the elements.\n");
             return -1;
@@ -89,17 +142,17 @@ int main(int argc, char *argv[]) {
     // Create pipeline and add elements to it
     pipeline = gst_pipeline_new("multi-screen-recorder");
     gst_bin_add_many(GST_BIN(pipeline), source, tee, NULL);
-    for (int i = 0; i < num; i++) {
+    for (int i = 0; i < video_format_count; i++) {
         gst_bin_add_many(GST_BIN(pipeline), queues[i], videoscales[i], converts[i], videorates[i], sinks[i], NULL);
     }
 
     // Set caps for videoscale
 
-    for (int i = 0; i < num; i++) {
+    for (int i = 0; i < video_format_count; i++) {
         caps[i] = gst_caps_new_simple("video/x-raw",
-                               "framerate", GST_TYPE_FRACTION, video_formats[i][2], 1,
-                               "width", G_TYPE_INT, video_formats[i][0],
-                               "height", G_TYPE_INT, video_formats[i][1],
+                               "framerate", GST_TYPE_FRACTION, video_formats[i].framerate, 1,
+                               "width", G_TYPE_INT, video_formats[i].width,
+                               "height", G_TYPE_INT, video_formats[i].height,
                                NULL);
     }
 
@@ -110,7 +163,7 @@ int main(int argc, char *argv[]) {
         return -1;
     }
 
-    for (int i = 0; i < num; i++) {
+    for (int i = 0; i < video_format_count; i++) {
         if (!gst_element_link_many(tee, queues[i], videorates[i], videoscales[i], NULL) ||
             !gst_element_link_filtered(videoscales[i], converts[i], caps[i]) ||
             !gst_element_link_many(converts[i], sinks[i], NULL)) {
@@ -120,7 +173,7 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    for (int i = 0; i < num; i++) {
+    for (int i = 0; i < video_format_count; i++) {
         gst_caps_unref(caps[i]);
     }
 

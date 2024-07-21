@@ -1,0 +1,3 @@
+display_number=1
+video_format=1920x1080, 30
+video_format=1280x720, 60
