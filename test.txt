@@ -11,3 +11,12 @@ gst-launch-1.0 playbin uri=file:///home/sandal/Projects/cppGstreamTest/output2.m
 gst-launch-1.0 ximagesrc use-damage=0  ! xvimagesink
 
 gst-launch-1.0 ximagesrc startx=0 use-damage=0 ! videoscale method=0 ! video/x-raw,framerate=30/1,width=860,height=140  ! videoconvert ! xvimagesink
+
+
+gst-launch-1.0 -e \
+    ximagesrc use-damage=0 ! tee name=t \
+    t. ! queue ! videoscale ! video/x-raw,framerate=30/1,width=1280,height=720 ! videoconvert ! xvimagesink \
+    t. ! queue ! videoscale ! video/x-raw,framerate=30/1,width=640,height=480 ! videoconvert ! xvimagesink
+
+
+gst-launch-1.0 ximagesrc use-damage=0 ! tee name=t ! queue ! videoscale ! video/x-raw,framerate=30/1,width=1280,height=720 ! videoconvert ! xvimagesink t. ! queue ! videoscale ! video/x-raw,framerate=30/1,width=640,height=480 ! videoconvert ! xvimagesink
