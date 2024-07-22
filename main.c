@@ -46,6 +46,34 @@ typedef struct {
     int framerate;
 } VideoFormat;
 
+void swap(VideoFormat* xp, VideoFormat* yp) 
+{ 
+    VideoFormat temp = *xp; 
+    *xp = *yp; 
+    *yp = temp; 
+} 
+  
+// Function to perform Selection Sort 
+void selectionSort(VideoFormat arr[], int n) 
+{ 
+    int i, j, min_idx; 
+  
+    // One by one move boundary of 
+    // unsorted subarray 
+    for (i = 0; i < n - 1; i++) { 
+        // Find the minimum element in 
+        // unsorted array 
+        min_idx = i; 
+        for (j = i + 1; j < n; j++) 
+            if (arr[j].width > arr[min_idx].width) 
+                min_idx = j; 
+  
+        // Swap the found minimum element 
+        // with the first element 
+        swap(&arr[min_idx], &arr[i]); 
+    } 
+}
+
 // Функция для парсинга строки с видеоформатом
 int parse_video_format(const char* str, VideoFormat* vf) {
     return sscanf(str, "%dx%d, %d", &vf->width, &vf->height, &vf->framerate) == 3;
@@ -96,6 +124,8 @@ int main(int argc, char *argv[]) {
         return EXIT_FAILURE;
     }
 
+    selectionSort(video_formats, video_format_count);
+
     GstElement *source, *tee;
     GstBus *bus;
     GstMessage *msg;
@@ -124,7 +154,7 @@ int main(int argc, char *argv[]) {
     }
 
     compositor = gst_element_factory_make("compositor", "compositor");
-    sink = gst_element_factory_make("autovideosink", "sink");
+    sink = gst_element_factory_make("xvimagesink", "sink");
 
     // Check that all elements are created successfully
     if (!source || !tee || !sink || !compositor) {
@@ -139,7 +169,33 @@ int main(int argc, char *argv[]) {
     }
 
     // Set properties for elements
-    g_object_set(source, "startx", 0, "use-damage", 0, NULL);
+    g_object_set(source, "startx", 0, "use-damage", 0, "display-name", concat_string_and_number(":", display_number), NULL);
+
+    /*GValue render_rectangle = G_VALUE_INIT;
+
+    GValue x_ = G_VALUE_INIT;
+    g_value_init(&x_, G_TYPE_INT);
+    g_value_set_int(&x_, 100);
+
+    GValue y_ = G_VALUE_INIT;
+    g_value_init(&y_, G_TYPE_INT);
+    g_value_set_int(&y_, 100);
+    
+    GValue width = G_VALUE_INIT;
+    g_value_init(&width, G_TYPE_INT);
+    g_value_set_int(&width, 1280);
+
+    GValue height = G_VALUE_INIT;
+    g_value_init(&height, G_TYPE_INT);
+    g_value_set_int(&height, 720);
+
+    g_value_init(&render_rectangle, GST_TYPE_ARRAY);
+    gst_value_array_append_and_take_value(&render_rectangle, &x_);
+    gst_value_array_append_and_take_value(&render_rectangle, &y_);
+    gst_value_array_append_and_take_value(&render_rectangle, &width);
+    gst_value_array_append_and_take_value(&render_rectangle, &height);
+    
+    g_object_set(sink, "render-rectangle", render_rectangle, NULL);*/
 
     // Create pipeline and add elements to it
     pipeline = gst_pipeline_new("multi-screen-recorder");
@@ -184,10 +240,11 @@ int main(int argc, char *argv[]) {
         sinkpads[i] = gst_element_request_pad_simple(compositor, "sink_%u");
     }
     int xpos_sum = 0;
-    for (int i = 0; i < video_format_count; i++) {
-        g_object_set(sinkpads[i], "xpos", xpos_sum, "ypos", 0, NULL);
+    for (int i = 1; i < video_format_count; i++) {
+        g_object_set(sinkpads[i], "xpos", xpos_sum, "ypos", video_formats[0].height, NULL);
         xpos_sum += video_formats[i].width;
     }
+    g_object_set(sinkpads[0], "xpos", xpos_sum <= video_formats[0].width ? 0 : (xpos_sum - video_formats[0].width) / 2, "ypos", 0, NULL);
     for (int i = 0; i < video_format_count; i++) {
         gst_object_unref(sinkpads[i]);
     }

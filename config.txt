@@ -1,3 +1,4 @@
-display_number=1
-video_format=640x360, 5
-video_format=1280x720, 30
+display_number=0
+video_format=640x360, 15
+video_format=640x360, 15
+video_format=1280x720, 60
