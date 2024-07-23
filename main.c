@@ -114,12 +114,12 @@ int parse_config_file(const char* filename, int* display_number, VideoFormat* vi
 }
 
 int main(int argc, char *argv[]) {
-    /*if (argc == 1) {
+    if (argc == 1) {
         printf("Not enough arguments! Please enter configuration file name!");
         return -1;
     }
-    const char* filename = argv[1];*/
-    const char* filename = "config.txt";
+    const char* filename = argv[1];
+    //const char* filename = "config.txt";
     int display_number;
     VideoFormat video_formats[MAX_VIDEO_FORMATS];
     int video_format_count;
