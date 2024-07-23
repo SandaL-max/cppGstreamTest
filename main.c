@@ -114,11 +114,12 @@ int parse_config_file(const char* filename, int* display_number, VideoFormat* vi
 }
 
 int main(int argc, char *argv[]) {
-    if (argc == 1) {
+    /*if (argc == 1) {
         printf("Not enough arguments! Please enter configuration file name!");
         return -1;
     }
-    const char* filename = argv[1];
+    const char* filename = argv[1];*/
+    const char* filename = "config.txt";
     int display_number;
     VideoFormat video_formats[MAX_VIDEO_FORMATS];
     int video_format_count;
@@ -217,11 +218,11 @@ int main(int argc, char *argv[]) {
 
     GstPad *sinkpads[video_format_count];
     for (int i = 0; i < video_format_count; i++) {
-        sinkpads[i] = gst_element_request_pad_simple(compositor, "sink_%u");
+        sinkpads[i] = gst_element_request_pad_simple(compositor, concat_string_and_number("sink_", i));
     }
     int xpos_sum = 0;
     for (int i = 1; i < video_format_count; i++) {
-        g_object_set(sinkpads[i], "xpos", xpos_sum, "ypos", video_formats[0].height, "width", video_formats[i].width, "height", video_formats[i].height, "operator", 0, NULL);
+        g_object_set(sinkpads[i], "xpos", xpos_sum, "ypos", video_formats[0].height, "width", video_formats[i].width, "height", video_formats[i].height, "operator", 0, "sizing-policy", 1, NULL);
         xpos_sum += video_formats[i].width;
     }
     g_object_set(sinkpads[0], "xpos", xpos_sum <= video_formats[0].width ? 0 : (xpos_sum - video_formats[0].width) / 2, "ypos", 0, NULL);
@@ -242,6 +243,8 @@ int main(int argc, char *argv[]) {
             return -1;
         }
     }
+
+    g_object_set(sink, "sync", 0, NULL);
 
     // Set the pipeline to the PLAYING state
     ret = gst_element_set_state(pipeline, GST_STATE_PLAYING);
