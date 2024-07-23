@@ -171,31 +171,7 @@ int main(int argc, char *argv[]) {
     // Set properties for elements
     g_object_set(source, "startx", 0, "use-damage", 0, "display-name", concat_string_and_number(":", display_number), NULL);
 
-    /*GValue render_rectangle = G_VALUE_INIT;
-
-    GValue x_ = G_VALUE_INIT;
-    g_value_init(&x_, G_TYPE_INT);
-    g_value_set_int(&x_, 100);
-
-    GValue y_ = G_VALUE_INIT;
-    g_value_init(&y_, G_TYPE_INT);
-    g_value_set_int(&y_, 100);
-    
-    GValue width = G_VALUE_INIT;
-    g_value_init(&width, G_TYPE_INT);
-    g_value_set_int(&width, 1280);
-
-    GValue height = G_VALUE_INIT;
-    g_value_init(&height, G_TYPE_INT);
-    g_value_set_int(&height, 720);
-
-    g_value_init(&render_rectangle, GST_TYPE_ARRAY);
-    gst_value_array_append_and_take_value(&render_rectangle, &x_);
-    gst_value_array_append_and_take_value(&render_rectangle, &y_);
-    gst_value_array_append_and_take_value(&render_rectangle, &width);
-    gst_value_array_append_and_take_value(&render_rectangle, &height);
-    
-    g_object_set(sink, "render-rectangle", render_rectangle, NULL);*/
+    g_object_set(compositor, "background", 1, NULL);
 
     // Create pipeline and add elements to it
     pipeline = gst_pipeline_new("multi-screen-recorder");
